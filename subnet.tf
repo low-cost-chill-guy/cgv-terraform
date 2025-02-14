@@ -33,14 +33,3 @@ resource "aws_subnet" "eksnet_work" {
     Name = "${var.name}-work-${count.index == 0 ? "a" : "c"}"
   }
 }
-
-resource "aws_subnet" "chill_db" {
-  count = 2
-  vpc_id            = aws_vpc.eks_vpc.id
-  cidr_block        = "10.0.${count.index + 4}.0/24"
-  availability_zone = "${var.region}${count.index == 0 ? "a":"c"}"
-
-  tags = {
-    Name = "${var.tag}-db${count.index == 0 ? "a":"c"}"
-  }
-}
