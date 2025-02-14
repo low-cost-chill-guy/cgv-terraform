@@ -33,4 +33,3 @@ resource "aws_subnet" "eksnet_work" {
     Name = "${var.name}-work-${count.index == 0 ? "a" : "c"}"
   }
 }
-
