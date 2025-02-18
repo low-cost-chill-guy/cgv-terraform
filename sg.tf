@@ -74,7 +74,7 @@ resource "aws_security_group" "eks_secu" {
     }
   ]
   tags = {
-    name = "pmh-sg"
+   Name = "${var.name}-sg"
   }
 }
 

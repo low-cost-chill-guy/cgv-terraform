@@ -1,3 +1,4 @@
+# EKS 마스터 노드 그룹
 resource "aws_eks_node_group" "eks_ma_node" {
   cluster_name    = aws_eks_cluster.eks_clu.name
   node_group_name = "${var.name}-master-node"
@@ -17,8 +18,6 @@ resource "aws_eks_node_group" "eks_ma_node" {
     max_unavailable = 1
   }
 
-  # Ensure that IAM Role permissions are created before and deleted after EKS Node Group handling.
-  # Otherwise, EKS will not be able to properly delete EC2 Instances and Elastic Network Interfaces.
   depends_on = [
     aws_iam_role_policy_attachment.eks-AmazonEKSWorkerNodePolicy,
     aws_iam_role_policy_attachment.eks-AmazonEKS_CNI_Policy,
@@ -26,14 +25,13 @@ resource "aws_eks_node_group" "eks_ma_node" {
   ]
 }
 
+# EKS 워커 노드 그룹
 resource "aws_eks_node_group" "eks_work_node" {
   cluster_name    = aws_eks_cluster.eks_clu.name
   node_group_name = "${var.name}-worker-node"
   node_role_arn   = aws_iam_role.eks_noderole.arn
   subnet_ids      = concat(aws_subnet.eksnet_work[*].id)
   capacity_type   = "ON_DEMAND"
-  disk_size       = 20
-  instance_types  = ["t3.micro"]
 
   scaling_config {
     desired_size = 2
@@ -45,6 +43,11 @@ resource "aws_eks_node_group" "eks_work_node" {
     max_unavailable = 1
   }
 
+  launch_template {
+    id      = aws_launch_template.eks_node_template.id
+    version = aws_launch_template.eks_node_template.latest_version
+  }
+
   depends_on = [
     aws_iam_role_policy_attachment.eks-AmazonEKSWorkerNodePolicy,
     aws_iam_role_policy_attachment.eks-AmazonEKS_CNI_Policy,
@@ -52,6 +55,7 @@ resource "aws_eks_node_group" "eks_work_node" {
   ]
 }
 
+# IAM 역할 생성
 resource "aws_iam_role" "eks_noderole" {
   name = "eks-noderole"
 
@@ -67,17 +71,57 @@ resource "aws_iam_role" "eks_noderole" {
   })
 }
 
+# 기본 EKS 노드 정책들
 resource "aws_iam_role_policy_attachment" "eks-AmazonEKSWorkerNodePolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
   role       = aws_iam_role.eks_noderole.name
+  depends_on = [aws_iam_role.eks_noderole]
 }
 
 resource "aws_iam_role_policy_attachment" "eks-AmazonEKS_CNI_Policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
   role       = aws_iam_role.eks_noderole.name
+  depends_on = [aws_iam_role.eks_noderole]
 }
 
 resource "aws_iam_role_policy_attachment" "eks-AmazonEC2ContainerRegistryReadOnly" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
   role       = aws_iam_role.eks_noderole.name
+  depends_on = [aws_iam_role.eks_noderole]
+}
+
+# 추가 노드 정책
+resource "aws_iam_role_policy" "eks_node_policy" {
+  name = "eks-node-policy"
+  role = aws_iam_role.eks_noderole.name
+  depends_on = [aws_iam_role.eks_noderole]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = aws_iam_role.eks_noderole.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "ec2:RunInstances",
+          "ec2:DescribeInstances",
+          "ec2:CreateLaunchTemplate",
+          "ec2:DescribeLaunchTemplates"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "eks:CreateNodegroup",
+          "eks:DescribeNodegroup"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
